@@ -1,0 +1,138 @@
+*ember.nvim* Animated campfire widget for Neovim
+
+Author: ember.nvim contributors
+License: MIT
+
+==============================================================================
+CONTENTS                                                  *ember.nvim-contents*
+
+1. Introduction .............................................. |ember.nvim-intro|
+2. Setup ...................................................... |ember.nvim-setup|
+3. Commands ................................................ |ember.nvim-commands|
+4. API .......................................................... |ember.nvim-api|
+5. Configuration .............................................. |ember.nvim-config|
+6. Highlights ............................................. |ember.nvim-highlights|
+
+==============================================================================
+INTRODUCTION                                                  *ember.nvim-intro*
+
+ember.nvim renders a small animated ASCII fire in a floating window using only
+Neovim APIs. It is designed to stay out of the way during coding sessions and
+to be scriptable from other plugins or configs.
+
+==============================================================================
+SETUP                                                          *ember.nvim-setup*
+
+Lua example: >
+  require("ember").setup({
+    width = 33,
+    height = 12,
+    fps = 10,
+    heat_levels = 11,
+    char_ramp = { " ", ".", ":", "^", "*", "x", "#", "%", "@", "&" },
+    wave = {
+      enabled = true,
+      style = "sway_breathe",
+      amount = "subtle",
+    },
+    attach = {
+      mode = "nvim-tree",
+    },
+    palette = "auto",
+  })
+<
+
+==============================================================================
+COMMANDS                                                    *ember.nvim-commands*
+
+                                                        *:EmberStart*
+:EmberStart    Start the fire animation
+
+                                                        *:EmberStop*
+:EmberStop     Stop the fire animation and close the window
+
+                                                        *:EmberToggle*
+:EmberToggle   Toggle the fire animation
+
+==============================================================================
+API                                                              *ember.nvim-api*
+
+                                                            *ember.setup()*
+`require("ember").setup(opts)`
+  Configure ember.nvim.
+
+                                                            *ember.start()*
+`require("ember").start(opts)`
+  Start the fire animation. Optional `opts` override the current configuration.
+
+                                                             *ember.stop()*
+`require("ember").stop()`
+  Stop the animation.
+
+                                                           *ember.toggle()*
+`require("ember").toggle(opts)`
+  Toggle the animation on and off.
+
+                                                    *ember.set_intensity()*
+`require("ember").set_intensity(value)`
+  Set fire intensity to a value between 0 and 1.
+
+==============================================================================
+CONFIGURATION                                                *ember.nvim-config*
+
+Default values: >
+  {
+    width = 33,
+    height = 12,
+    fps = 10,
+    zindex = 40,
+    border = "none",
+    row_offset = 1,
+    col_offset = 0,
+    intensity = 0.65,
+    palette = "auto",
+    heat_levels = 11,
+    char_ramp = { " ", ".", ":", "^", "*", "x", "#", "%", "@", "&" },
+    wave = {
+      enabled = true,
+      style = "sway_breathe",
+      amount = "subtle",
+    },
+    force_palette = false,
+    attach = {
+      mode = "nvim-tree",
+      position = "bottom-left",
+    },
+  }
+<
+
+`attach.mode` supports:
+  - `float`
+  - `editor`
+  - `nvim-tree`
+
+When `attach.mode = "nvim-tree"` and the tree window is not available,
+ember.nvim falls back to `float` mode.
+
+==============================================================================
+HIGHLIGHTS                                                *ember.nvim-highlights*
+
+ember.nvim uses these highlight groups:
+  - `EmberFire0`
+  - `EmberFire1`
+  - `EmberFire2`
+  - `EmberFire3`
+  - `EmberFire4`
+  - `EmberFire5`
+  - `EmberFire6`
+  - `EmberFire7`
+  - `EmberFire8`
+  - `EmberFire9`
+  - `EmberFire10`
+  - `EmberFire11`
+
+Themes and users may define these groups before setup to override ember.nvim
+palette behavior. Set `force_palette = true` to reapply the configured palette
+even when the highlight groups already exist.
+
+vim:tw=78:ts=8:noet:ft=help:norl:
