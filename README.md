@@ -6,8 +6,6 @@ Animated ASCII campfire for Neovim, built with floating windows and highlight gr
 
 ![ember.nvim full preview](ember.neovim.gif)
 
-![ember.nvim mockup](assets/ember-preview.svg)
-
 ## Features
 
 - Standalone Neovim plugin with `setup`, `start`, `stop`, `toggle`, and `set_intensity`
