@@ -2,7 +2,11 @@
 
 Animated ASCII campfire for Neovim, built with floating windows and highlight groups instead of terminal escape rendering.
 
-![ember.nvim preview](assets/ember-preview.svg)
+![ember.nvim preview](ember.neovim-cropped.gif)
+
+![ember.nvim full preview](ember.neovim.gif)
+
+![ember.nvim mockup](assets/ember-preview.svg)
 
 ## Features
 
