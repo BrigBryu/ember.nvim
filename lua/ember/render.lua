@@ -1,300 +1,401 @@
 local M = {}
 
 local DEFAULT_HEAT_LEVELS = 11
-local default_ramp = { " ", ".", ":", "^", "*", "x", "#", "%", "@", "&" }
-local tau = math.pi * 2
+local DEFAULT_RAMP = { " ", ".", ":", "^", "*", "x", "#", "%", "@", "&" }
 
-local function clamp(value, low, high)
+local scene_modules = {
+  fire = require("ember.scenes.fire"),
+  spiral = require("ember.scenes.spiral"),
+}
+
+function M.clamp(value, low, high)
   return math.max(low, math.min(high, value))
 end
 
-local function split_chars(line)
-  return vim.fn.split(line, "\\zs")
-end
-
-local function resolve_wave(opts)
-  local wave = opts and opts.wave or {}
-  local fps = math.max(1, tonumber(opts and opts.fps) or 10)
-  local amount = wave.amount or "subtle"
-
-  local profile = {
-    enabled = wave.enabled ~= false,
-    style = wave.style or "sway_breathe",
-    amount = amount,
-    sway_period_frames = math.floor(fps * 6),
-    breathe_period_frames = math.floor(fps * 8.5),
-    sway_amplitude = 1.35,
-    radius_mod = 0.08,
-    height_mod = 0.07,
-    energy_mod = 0.05,
-  }
-
-  if amount == "medium" then
-    profile.sway_amplitude = 1.8
-    profile.radius_mod = 0.1
-    profile.height_mod = 0.09
-    profile.energy_mod = 0.07
-  elseif amount == "pronounced" then
-    profile.sway_amplitude = 2.25
-    profile.radius_mod = 0.13
-    profile.height_mod = 0.12
-    profile.energy_mod = 0.1
+function M.ensure_scene(name)
+  if scene_modules[name] then
+    return name
   end
-
-  return profile
+  return "fire"
 end
 
-local function ramp_for(state)
-  local ramp = state.char_ramp or default_ramp
+local function build_lookup(opts)
+  local heat_levels = math.max(1, tonumber(opts and opts.heat_levels) or DEFAULT_HEAT_LEVELS)
+  local ramp = opts and opts.char_ramp or DEFAULT_RAMP
   if #ramp < 2 then
-    return default_ramp
+    ramp = DEFAULT_RAMP
   end
-  return ramp
+
+  local glyph_lookup = {}
+  local group_lookup = {}
+  local max_index = #ramp - 1
+
+  for level = 0, heat_levels do
+    local mapped = M.clamp(math.floor((level / heat_levels) * max_index + 0.5), 0, max_index)
+    glyph_lookup[level] = ramp[mapped + 1]
+    group_lookup[level] = ("EmberFire%d"):format(level)
+  end
+
+  return heat_levels, glyph_lookup, group_lookup
 end
 
-function M.new(width, height, opts)
+local function new_grid(size)
   local grid = {}
+  for index = 1, size do
+    grid[index] = 0
+  end
+  return grid
+end
+
+local function new_chars(size, fill)
+  local chars = {}
+  for index = 1, size do
+    chars[index] = fill
+  end
+  return chars
+end
+
+local function new_row_buffers(height, width)
+  local rows = {}
+  local lines = {}
+  local runs = {}
 
   for row = 1, height do
-    grid[row] = {}
-    for col = 1, width do
-      grid[row][col] = 0
+    rows[row] = {}
+    lines[row] = string.rep(" ", width)
+    runs[row] = {}
+  end
+
+  return rows, lines, runs
+end
+
+local function clear_runs(runs)
+  for index = 1, #runs do
+    runs[index] = nil
+  end
+end
+
+local function clear_row_cells(state, row)
+  local row_offset = state.row_offsets[row]
+  local curr_chars = state.curr_chars
+  local curr_levels = state.curr_levels
+
+  for col = 1, state.width do
+    local index = row_offset + col
+    curr_chars[index] = " "
+    curr_levels[index] = 0
+  end
+end
+
+local function begin_frame(state)
+  state.frame_id = state.frame_id + 1
+  state.touched_count = 0
+  state.active_count = 0
+end
+
+local function ensure_row_touched(state, row)
+  if state.touched_stamp[row] == state.frame_id then
+    return
+  end
+
+  state.touched_stamp[row] = state.frame_id
+  state.touched_count = state.touched_count + 1
+  state.touched_rows[state.touched_count] = row
+  clear_row_cells(state, row)
+end
+
+local function mark_row_active(state, row)
+  if state.active_stamp[row] == state.frame_id then
+    return
+  end
+
+  state.active_stamp[row] = state.frame_id
+  state.active_count = state.active_count + 1
+  state.active_rows[state.active_count] = row
+end
+
+local function build_row_runs(state, row, row_offset)
+  local runs = state.row_runs[row]
+  local levels = state.curr_levels
+  local groups = state.group_lookup
+
+  clear_runs(runs)
+
+  local run_count = 0
+  local start_col = 1
+  local last_level = levels[row_offset + 1]
+
+  for col = 2, state.width do
+    local level = levels[row_offset + col]
+    if level ~= last_level then
+      run_count = run_count + 1
+      local run = runs[run_count] or {}
+      run.group = groups[last_level]
+      run.start_col = start_col - 1
+      run.end_col = col - 1
+      runs[run_count] = run
+      start_col = col
+      last_level = level
     end
   end
 
-  return {
+  run_count = run_count + 1
+  local run = runs[run_count] or {}
+  run.group = groups[last_level]
+  run.start_col = start_col - 1
+  run.end_col = state.width
+  runs[run_count] = run
+
+  for index = run_count + 1, #runs do
+    runs[index] = nil
+  end
+
+  return run_count
+end
+
+local function materialize_row(state, row)
+  local row_offset = state.row_offsets[row]
+  local row_chars = state.row_buffers[row]
+
+  for col = 1, state.width do
+    row_chars[col] = state.curr_chars[row_offset + col]
+  end
+
+  state.lines[row] = table.concat(row_chars)
+  return build_row_runs(state, row, row_offset)
+end
+
+local function finalize_frame(state)
+  local prev_chars = state.prev_chars
+  local prev_levels = state.prev_levels
+  local curr_chars = state.curr_chars
+  local curr_levels = state.curr_levels
+  local dirty_rows = state.dirty_rows
+  local prev_active_rows = state.prev_active_rows
+  local prev_active_count = state.prev_active_count
+  local frame_id = state.frame_id
+
+  local dirty_count = 0
+  local total_runs = 0
+
+  for index = 1, state.touched_count do
+    local row = state.touched_rows[index]
+    local row_offset = state.row_offsets[row]
+    local dirty = false
+
+    for col = 1, state.width do
+      local cell_index = row_offset + col
+      if curr_chars[cell_index] ~= prev_chars[cell_index] or curr_levels[cell_index] ~= prev_levels[cell_index] then
+        dirty = true
+        break
+      end
+    end
+
+    if dirty then
+      dirty_count = dirty_count + 1
+      dirty_rows[dirty_count] = row
+      total_runs = total_runs + materialize_row(state, row)
+    end
+  end
+
+  for index = 1, prev_active_count do
+    local row = prev_active_rows[index]
+    if state.touched_stamp[row] ~= frame_id and state.active_stamp[row] ~= frame_id then
+      clear_row_cells(state, row)
+      dirty_count = dirty_count + 1
+      dirty_rows[dirty_count] = row
+      total_runs = total_runs + materialize_row(state, row)
+    end
+  end
+
+  for index = dirty_count + 1, #dirty_rows do
+    dirty_rows[index] = nil
+  end
+
+  if dirty_count > 1 then
+    table.sort(dirty_rows, function(a, b)
+      return a < b
+    end)
+  end
+
+  state.prev_chars, state.curr_chars = curr_chars, prev_chars
+  state.prev_levels, state.curr_levels = curr_levels, prev_levels
+  state.prev_active_rows, state.active_rows = state.active_rows, prev_active_rows
+  state.prev_active_count = state.active_count
+
+  state.frame.dirty_count = dirty_count
+  state.frame.dirty_rows = dirty_rows
+  state.frame.lines = state.lines
+  state.frame.row_runs = state.row_runs
+  state.frame.total_runs = total_runs
+  state.frame.dirty_ratio = dirty_count / math.max(1, state.height)
+
+  return state.frame
+end
+
+function M.index(state, row, col)
+  return state.row_offsets[row] + col
+end
+
+function M.grid_get(state, row, col)
+  return state.grid[state.row_offsets[row] + col]
+end
+
+function M.grid_set(state, row, col, value)
+  state.grid[state.row_offsets[row] + col] = value
+end
+
+function M.next_grid_set(state, row, col, value)
+  state.next_grid[state.row_offsets[row] + col] = value
+end
+
+function M.clear_grid(state, decay)
+  local keep = decay or 0
+  local grid = state.grid
+  for index = 1, state.size do
+    grid[index] = grid[index] * keep
+  end
+end
+
+function M.swap_grids(state)
+  state.grid, state.next_grid = state.next_grid, state.grid
+end
+
+function M.clear_next_grid(state)
+  local next_grid = state.next_grid
+  for index = 1, state.size do
+    next_grid[index] = 0
+  end
+end
+
+function M.max_heat(state)
+  return state.max_heat
+end
+
+function M.highlight_for(state, level)
+  return state.group_lookup[M.clamp(level, 0, state.max_heat)]
+end
+
+function M.glyph_for(state, level)
+  return state.glyph_lookup[M.clamp(level, 0, state.max_heat)]
+end
+
+function M.set_cell(state, row, col, char, level)
+  if row < 1 or row > state.height or col < 1 or col > state.width then
+    return
+  end
+
+  ensure_row_touched(state, row)
+  local index = state.row_offsets[row] + col
+  local clamped = M.clamp(level or 0, 0, state.max_heat)
+  state.curr_chars[index] = char
+  state.curr_levels[index] = clamped
+
+  if char ~= " " or clamped > 0 then
+    mark_row_active(state, row)
+  end
+end
+
+function M.paint_heat(state, row, col, level)
+  if row < 1 or row > state.height or col < 1 or col > state.width then
+    return
+  end
+
+  ensure_row_touched(state, row)
+  local clamped = M.clamp(math.floor(level + 0.5), 0, state.max_heat)
+  local index = state.row_offsets[row] + col
+  state.curr_chars[index] = state.glyph_lookup[clamped]
+  state.curr_levels[index] = clamped
+
+  if clamped > 0 then
+    mark_row_active(state, row)
+  end
+end
+
+function M.scene_for(state)
+  return scene_modules[state.scene]
+end
+
+function M.new(width, height, opts)
+  local scene = M.ensure_scene(opts and opts.scene or "fire")
+  local size = width * height
+  local heat_levels, glyph_lookup, group_lookup = build_lookup(opts)
+  local row_buffers, lines, row_runs = new_row_buffers(height, width)
+  local row_offsets = {}
+  local left_cols = {}
+  local right_cols = {}
+
+  for row = 1, height do
+    row_offsets[row] = (row - 1) * width
+  end
+
+  for col = 1, width do
+    left_cols[col] = math.max(1, col - 1)
+    right_cols[col] = math.min(width, col + 1)
+  end
+
+  local state = {
+    scene = scene,
     width = width,
     height = height,
-    grid = grid,
+    size = size,
+    max_heat = heat_levels,
+    glyph_lookup = glyph_lookup,
+    group_lookup = group_lookup,
+    grid = new_grid(size),
+    next_grid = new_grid(size),
+    curr_chars = new_chars(size, " "),
+    prev_chars = new_chars(size, " "),
+    curr_levels = new_grid(size),
+    prev_levels = new_grid(size),
+    row_buffers = row_buffers,
+    row_runs = row_runs,
+    dirty_rows = {},
+    lines = lines,
+    row_offsets = row_offsets,
+    left_cols = left_cols,
+    right_cols = right_cols,
+    touched_rows = {},
+    touched_stamp = {},
+    touched_count = 0,
+    active_rows = {},
+    prev_active_rows = {},
+    active_stamp = {},
+    active_count = 0,
+    prev_active_count = 0,
+    frame_id = 0,
+    phase = 0,
+    intensity = 1,
+    wave = opts and vim.deepcopy(opts.wave or {}) or {},
+    spiral = opts and vim.deepcopy(opts.spiral or {}) or {},
     fuel = {},
     tongues = {},
-    phase = 0,
-    wave = resolve_wave(opts),
     smoke = {
       col = nil,
       life = 0,
     },
-    intensity = 1,
-    char_ramp = opts and opts.char_ramp or nil,
-    heat_levels = opts and opts.heat_levels or DEFAULT_HEAT_LEVELS,
+    spiral_state = {},
+    frame = {},
   }
-end
 
-local function max_heat(state)
-  return math.max(1, tonumber(state.heat_levels) or DEFAULT_HEAT_LEVELS)
-end
-
-local function update_tongues(state)
-  state.phase = (state.phase or 0) + 1
-  for col = 1, state.width do
-    local target = math.random()
-    local previous = state.tongues[col] or target
-    state.tongues[col] = (previous * 0.88) + (target * 0.12)
-  end
-end
-
-local function update_wave(state)
-  local wave = state.wave
-  if not wave or not wave.enabled then
-    return
+  local scene_module = M.scene_for(state)
+  if scene_module and scene_module.init then
+    scene_module.init(state, M)
   end
 
-  wave.phase = (wave.phase or 0) + 1
-  local sway_theta = tau * (wave.phase / math.max(1, wave.sway_period_frames))
-  local breathe_theta = tau * (wave.phase / math.max(1, wave.breathe_period_frames))
-
-  wave.sway = math.sin(sway_theta) * wave.sway_amplitude
-  wave.breathe = math.sin(breathe_theta)
-end
-
-local function seed_bottom(state)
-  local fuel_row = math.max(1, state.height - 1)
-  local center = (state.width + 1) / 2
-  local band_half = math.max(2, math.floor(state.width * 0.16))
-  local heat_max = max_heat(state)
-  local wave = state.wave
-  local sway = wave and wave.enabled and (wave.sway or 0) or 0
-  local breathe = wave and wave.enabled and (wave.breathe or 0) or 0
-  local energy = wave and wave.enabled and (1 + wave.energy_mod * breathe) or 1
-
-  for col = 1, state.width do
-    local distance = math.abs(col - (center + sway * 0.35))
-    local target = 0
-
-    if distance <= band_half then
-      local falloff = 1 - (distance / (band_half + 1))
-      local pulse = 0.95 + math.random() * 0.35
-      local center_bias = 0.72 + falloff * 0.55
-      target = clamp((heat_max * center_bias) * pulse * state.intensity * energy, 0, heat_max)
-    elseif distance <= band_half + 1 and math.random() < 0.35 then
-      target = clamp((1.0 + math.random() * 1.2) * state.intensity * energy, 0, heat_max * 0.22)
-    end
-
-    local previous = state.fuel[col] or state.grid[fuel_row][col] or 0
-    local smoothed = (previous * 0.78) + (target * 0.22)
-    if target == 0 and smoothed < 0.08 then
-      smoothed = 0
-    end
-
-    state.fuel[col] = smoothed
-    state.grid[fuel_row][col] = smoothed
-  end
+  return state
 end
 
 function M.step(state, intensity)
-  state.intensity = clamp(intensity or state.intensity or 1, 0, 1)
-  update_wave(state)
-  update_tongues(state)
-  seed_bottom(state)
-  local heat_max = max_heat(state)
-
-  for row = state.height - 2, 1, -1 do
-    for col = 1, state.width do
-      local sample_row = clamp(row + 1, 1, state.height)
-      local below = state.grid[sample_row][col]
-      local left = state.grid[sample_row][clamp(col - 1, 1, state.width)]
-      local right = state.grid[sample_row][clamp(col + 1, 1, state.width)]
-      local drift_col = clamp(col + math.random(-1, 1), 1, state.width)
-      local drift = state.grid[sample_row][drift_col]
-      local average = (below * 0.34) + (left * 0.18) + (right * 0.18) + (drift * 0.30)
-      local cooling = 0.45 + math.random() * 0.75 + (1 - state.intensity) * 1.2
-      if row <= 2 then
-        cooling = cooling + 0.5
-      end
-
-      local next_heat = clamp(average - cooling, 0, heat_max)
-      local previous = state.grid[row][col]
-      local from_base = (state.height - row) / math.max(1, state.height - 2)
-      local inertia = 0.25 + from_base * 0.35
-      if row >= state.height - 3 then
-        inertia = 0.18
-      elseif row <= 3 then
-        inertia = 0.42
-      end
-
-      state.grid[row][col] = (previous * inertia) + (next_heat * (1 - inertia))
-    end
-  end
+  state.intensity = M.clamp(intensity or state.intensity or 1, 0, 1)
+  M.scene_for(state).step(state, state.intensity, M)
 end
 
-local function flame_level(state, row, col)
-  local center = (state.width + 1) / 2
-  local wave = state.wave
-  local from_bottom = state.height - row
-  local max_flame_rows = math.max(3, state.height - 2)
-  local heat_max = max_heat(state)
-
-  if from_bottom < 1 or from_bottom > max_flame_rows then
-    return nil
-  end
-
-  local normalized_height = (from_bottom - 1) / math.max(1, state.height - 3)
-  local sway = wave and wave.enabled and (wave.sway or 0) or 0
-  local breathe = wave and wave.enabled and (wave.breathe or 0) or 0
-  local wave_center = center + sway * (0.35 + normalized_height * 0.85)
-  local distance = math.abs(col - wave_center)
-  local base_radius = state.width * 0.23
-  local top_radius = state.width * 0.045
-  local radius = base_radius * (1 - normalized_height) + top_radius * normalized_height
-  if wave and wave.enabled then
-    radius = radius * (1 + wave.radius_mod * breathe)
-  end
-  local tongue = state.tongues[col] or 0
-  local tongue_boost = tongue * 0.28
-  local effective_height = math.max(0, normalized_height - tongue_boost - ((wave and wave.enabled) and (wave.height_mod * breathe) or 0))
-  local mask = 1 - (distance / math.max(0.6, radius))
-  if mask <= 0 then
-    return 0
-  end
-  mask = mask * mask
-
-  local heat = state.grid[row][col]
-  local height_fade = 1.05 - effective_height * 0.55
-  local shaped = heat * (0.35 + mask * 1.15) * height_fade
-  if normalized_height > 0.72 then
-    shaped = shaped * (0.55 + tongue * 0.45)
-  end
-
-  return clamp(math.floor(shaped + 0.5), 0, heat_max)
-end
-
-local function glyph_for(state, level)
-  local ramp = ramp_for(state)
-  local max_index = #ramp - 1
-  local mapped = clamp(math.floor((level / max_heat(state)) * max_index + 0.5), 0, max_index)
-  return ramp[mapped + 1], mapped
-end
-
-local function highlight_for(state, level)
-  return ("EmberFire%d"):format(clamp(level, 0, max_heat(state)))
-end
-
-function M.lines(state)
-  local lines = {}
-  local highlights = {}
-  local center = math.floor((state.width + 1) / 2)
-  local wave = state.wave
-  local spark_row = math.max(1, state.height - 7)
-  local log_row = state.height
-
-  for row = 1, state.height do
-    local chars = {}
-    highlights[row] = {}
-
-    for col = 1, state.width do
-      chars[col] = " "
-      highlights[row][col] = "EmberFire0"
-
-      if row < log_row then
-        local level = flame_level(state, row, col)
-        if level and level > 0 then
-          local glyph = glyph_for(state, level)
-          chars[col] = glyph
-          highlights[row][col] = highlight_for(state, level)
-        end
-      end
-    end
-
-    lines[row] = table.concat(chars)
-  end
-
-  if state.smoke.life > 0 then
-    state.smoke.life = state.smoke.life - 1
-  elseif math.random() < 0.14 then
-    local sway = wave and wave.enabled and (wave.sway or 0) or 0
-    local smoke_center = center + math.floor(sway + 0.5)
-    state.smoke.col = clamp(smoke_center + math.random(-2, 2), 1, state.width)
-    state.smoke.life = 3
-  end
-
-  if lines[spark_row] and state.smoke.life > 0 and state.smoke.col then
-    local chars = split_chars(lines[spark_row])
-    local col = state.smoke.col
-    if chars[col] == " " then
-      chars[col] = "."
-      highlights[spark_row][col] = highlight_for(state, math.min(4, max_heat(state)))
-      lines[spark_row] = table.concat(chars)
-    end
-  end
-
-  if lines[log_row] then
-    local chars = split_chars(lines[log_row])
-    local log = { "/", "_", "_", "_", "_", "\\" }
-    local start_col = center - 2
-    for index = 1, 6 do
-      local col = start_col + index - 1
-      if chars[col] then
-        chars[col] = log[index]
-        local low = math.max(2, math.floor(max_heat(state) * 0.22))
-        local mid = math.max(low + 1, math.floor(max_heat(state) * 0.36))
-        local group = (index >= 2 and index <= 5) and highlight_for(state, mid) or highlight_for(state, low)
-        highlights[log_row][col] = group
-      end
-    end
-    lines[log_row] = table.concat(chars)
-  end
-
-  return lines, highlights
+function M.frame(state, intensity)
+  begin_frame(state)
+  M.step(state, intensity)
+  M.scene_for(state).render(state, M)
+  return finalize_frame(state)
 end
 
 return M

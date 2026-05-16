@@ -16,9 +16,9 @@ CONTENTS                                                  *ember.nvim-contents*
 ==============================================================================
 INTRODUCTION                                                  *ember.nvim-intro*
 
-ember.nvim renders a small animated ASCII fire in a floating window using only
-Neovim APIs. It is designed to stay out of the way during coding sessions and
-to be scriptable from other plugins or configs.
+ember.nvim renders small animated ASCII heat-map scenes in a floating window
+using only Neovim APIs. It is designed to stay out of the way during coding
+sessions and to be scriptable from other plugins or configs.
 
 ==============================================================================
 SETUP                                                          *ember.nvim-setup*
@@ -27,13 +27,28 @@ Lua example: >
   require("ember").setup({
     width = 33,
     height = 12,
-    fps = 10,
+    fps = 8,
+    adaptive_fps = {
+      enabled = false,
+      idle_fps = 4,
+      active_fps = 8,
+    },
+    full_rewrite_threshold = 0.6,
+    scene = "fire",
     heat_levels = 11,
     char_ramp = { " ", ".", ":", "^", "*", "x", "#", "%", "@", "&" },
     wave = {
       enabled = true,
       style = "sway_breathe",
       amount = "subtle",
+    },
+    spiral = {
+      turns = 1.85,
+      thickness = 1.15,
+      rotation_speed = 0.24,
+      pulse_amount = 0.08,
+      center_bias_x = 0,
+      center_bias_y = 0,
     },
     attach = {
       mode = "nvim-tree",
@@ -53,6 +68,10 @@ COMMANDS                                                    *ember.nvim-commands
 
                                                         *:EmberToggle*
 :EmberToggle   Toggle the fire animation
+
+                                                  *:EmberBenchmark*
+:EmberBenchmark [frames]
+               Run an offscreen benchmark and print average frame metrics
 
 ==============================================================================
 API                                                              *ember.nvim-api*
@@ -77,6 +96,16 @@ API                                                              *ember.nvim-api
 `require("ember").set_intensity(value)`
   Set fire intensity to a value between 0 and 1.
 
+                                                        *ember.stats()*
+`require("ember").stats()`
+  Return cumulative runtime counters for frames, row rewrites,
+  Neovim API usage, and render/write timing breakdowns.
+
+                                                    *ember.benchmark()*
+`require("ember").benchmark(opts)`
+  Run an offscreen benchmark and return average frame timing, render/write
+  timing breakdowns, dirty-row, and highlight batching metrics.
+
 ==============================================================================
 CONFIGURATION                                                *ember.nvim-config*
 
@@ -84,7 +113,14 @@ Default values: >
   {
     width = 33,
     height = 12,
-    fps = 10,
+    fps = 8,
+    adaptive_fps = {
+      enabled = false,
+      idle_fps = 4,
+      active_fps = 8,
+    },
+    full_rewrite_threshold = 0.6,
+    scene = "fire",
     zindex = 40,
     border = "none",
     row_offset = 1,
@@ -97,6 +133,14 @@ Default values: >
       enabled = true,
       style = "sway_breathe",
       amount = "subtle",
+    },
+    spiral = {
+      turns = 1.85,
+      thickness = 1.15,
+      rotation_speed = 0.24,
+      pulse_amount = 0.08,
+      center_bias_x = 0,
+      center_bias_y = 0,
     },
     force_palette = false,
     attach = {
@@ -113,6 +157,18 @@ Default values: >
 
 When `attach.mode = "nvim-tree"` and the tree window is not available,
 ember.nvim falls back to `float` mode.
+
+`scene` supports:
+  - `fire`
+  - `spiral`
+
+`wave` applies to the `fire` scene. `spiral` applies to the `spiral` scene and
+controls the vortex turns, thickness, rotation speed, pulse amount, and center
+offset.
+
+`adaptive_fps` is optional and lowers the frame rate when ember is visually
+quiet. `full_rewrite_threshold` controls when dirty-row updates give way to a
+complete frame rewrite.
 
 ==============================================================================
 HIGHLIGHTS                                                *ember.nvim-highlights*
