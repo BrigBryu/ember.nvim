@@ -25,6 +25,8 @@ Animated ASCII heat-map widgets for Neovim, built with floating windows and high
 
 In the current benchmark pass, `spiral 80x24` improved from roughly `0.48ms` to `0.26ms` average frame time while also dropping from frequent full rewrites to only occasional ones.
 
+In practice, that means ember should feel much lighter during normal editing, especially on larger windows or when running the spiral scene for long sessions.
+
 ## Installation
 
 ### lazy.nvim
@@ -117,6 +119,20 @@ require("ember").setup({
   palette = "gruvbox",
   attach = {
     mode = "nvim-tree",
+  },
+})
+```
+
+## Battery-Friendly Example
+
+```lua
+require("ember").setup({
+  fps = 6,
+  intensity = 0.45,
+  adaptive_fps = {
+    enabled = true,
+    idle_fps = 3,
+    active_fps = 6,
   },
 })
 ```
