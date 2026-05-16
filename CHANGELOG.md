@@ -7,6 +7,7 @@
 - Added `require("ember").benchmark(opts)` and `:EmberBenchmark [frames]` for offscreen performance measurement.
 - Added `adaptive_fps` and `full_rewrite_threshold` configuration for battery-friendly pacing and smarter buffer updates.
 - Added `spiral` scene configuration and documentation alongside the existing fire scene.
+- Added a new `lava` scene with slow metaball-style blob motion using the same optimized renderer pipeline and ember palette.
 
 ### Changed
 - Lowered the default FPS from `10` to `8` to reduce idle power use.

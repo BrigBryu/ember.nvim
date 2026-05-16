@@ -42,6 +42,13 @@ Lua example: >
       style = "sway_breathe",
       amount = "subtle",
     },
+    lava = {
+      blobs = 4,
+      speed = 0.16,
+      pulse_amount = 0.08,
+      center_bias_x = 0,
+      center_bias_y = 0,
+    },
     spiral = {
       turns = 1.85,
       thickness = 1.15,
@@ -134,6 +141,13 @@ Default values: >
       style = "sway_breathe",
       amount = "subtle",
     },
+    lava = {
+      blobs = 4,
+      speed = 0.16,
+      pulse_amount = 0.08,
+      center_bias_x = 0,
+      center_bias_y = 0,
+    },
     spiral = {
       turns = 1.85,
       thickness = 1.15,
@@ -160,11 +174,13 @@ ember.nvim falls back to `float` mode.
 
 `scene` supports:
   - `fire`
+  - `lava`
   - `spiral`
 
-`wave` applies to the `fire` scene. `spiral` applies to the `spiral` scene and
-controls the vortex turns, thickness, rotation speed, pulse amount, and center
-offset.
+`wave` applies to the `fire` scene. `lava` applies to the `lava` scene and
+controls the metaball blob count, movement speed, pulse amount, and center
+offset. `spiral` applies to the `spiral` scene and controls the vortex turns,
+thickness, rotation speed, pulse amount, and center offset.
 
 `adaptive_fps` is optional and lowers the frame rate when ember is visually
 quiet. `full_rewrite_threshold` controls when dirty-row updates give way to a

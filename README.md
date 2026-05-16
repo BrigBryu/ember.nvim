@@ -9,7 +9,7 @@ Animated ASCII heat-map widgets for Neovim, built with floating windows and high
 ## Features
 
 - Standalone Neovim plugin with `setup`, `start`, `stop`, `toggle`, `set_intensity`, `stats`, and `benchmark`
-- Multiple scenes: classic fire plus a looping ember spiral
+- Multiple scenes: classic fire, a smooth lava metaball scene, and a looping ember spiral
 - Non-focusable floating window that survives buffer switching
 - Palette system with `auto`, `gruvbox`, `default`, or custom highlight specs
 - Optional `nvim-tree` attach mode with automatic fallback to float mode
@@ -78,6 +78,7 @@ use({
 ```lua
 require("ember").setup()
 require("ember").start()
+require("ember").start({ scene = "lava" })
 require("ember").start({ scene = "spiral" })
 require("ember").stop()
 require("ember").toggle()
@@ -94,6 +95,19 @@ require("ember").stop()
 require("ember").set_intensity(0.4)
 require("ember").stats()
 require("ember").benchmark({ frames = 180 })
+```
+
+## Lava Example
+
+```lua
+require("ember").setup({
+  scene = "lava",
+  lava = {
+    blobs = 4,
+    speed = 0.16,
+    pulse_amount = 0.08,
+  },
+})
 ```
 
 ## Spiral Example
@@ -157,7 +171,7 @@ require("ember").setup({
     active_fps = 8,
   },
   full_rewrite_threshold = 0.6,
-  scene = "fire", -- "fire" | "spiral"
+  scene = "fire", -- "fire" | "spiral" | "lava"
   zindex = 40,
   border = "none",
   row_offset = 1,
@@ -170,6 +184,13 @@ require("ember").setup({
     enabled = true,
     style = "sway_breathe",
     amount = "subtle",
+  },
+  lava = {
+    blobs = 4,
+    speed = 0.16,
+    pulse_amount = 0.08,
+    center_bias_x = 0,
+    center_bias_y = 0,
   },
   spiral = {
     turns = 1.85,
@@ -190,6 +211,8 @@ require("ember").setup({
 `wave.amount` supports `subtle`, `medium`, and `pronounced` for the `fire` scene. The default `subtle` profile uses a slow sway and breathing cycle for ambient motion rather than dramatic oscillation.
 
 The `spiral` table applies only to `scene = "spiral"` and controls the vortex turns, width, rotation speed, pulse, and center offset.
+
+The `lava` table applies only to `scene = "lava"` and controls how many soft blobs drift through the widget, how quickly they move, how much they pulse, and how the whole scene is biased within the window. Lava is a smooth metaball-like scene that uses the same warm ember palette and char ramp.
 
 `adaptive_fps` is optional and drops to `idle_fps` when ember is visually quiet, then returns to `active_fps` as motion picks back up. `full_rewrite_threshold` controls when the renderer stops doing dirty-row updates and rewrites the entire frame instead.
 

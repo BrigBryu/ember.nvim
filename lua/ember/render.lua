@@ -5,6 +5,7 @@ local DEFAULT_RAMP = { " ", ".", ":", "^", "*", "x", "#", "%", "@", "&" }
 
 local scene_modules = {
   fire = require("ember.scenes.fire"),
+  lava = require("ember.scenes.lava"),
   spiral = require("ember.scenes.spiral"),
 }
 
@@ -367,6 +368,7 @@ function M.new(width, height, opts)
     phase = 0,
     intensity = 1,
     wave = opts and vim.deepcopy(opts.wave or {}) or {},
+    lava = opts and vim.deepcopy(opts.lava or {}) or {},
     spiral = opts and vim.deepcopy(opts.spiral or {}) or {},
     fuel = {},
     tongues = {},
@@ -374,6 +376,7 @@ function M.new(width, height, opts)
       col = nil,
       life = 0,
     },
+    lava_state = {},
     spiral_state = {},
     frame = {},
   }

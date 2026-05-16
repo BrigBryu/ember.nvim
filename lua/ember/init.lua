@@ -28,6 +28,13 @@ local defaults = {
     style = "sway_breathe",
     amount = "subtle",
   },
+  lava = {
+    blobs = 4,
+    speed = 0.16,
+    pulse_amount = 0.08,
+    center_bias_x = 0,
+    center_bias_y = 0,
+  },
   spiral = {
     turns = 1.85,
     thickness = 1.15,
@@ -232,6 +239,7 @@ local function build_renderer_opts(opts)
     char_ramp = opts.char_ramp,
     heat_levels = opts.heat_levels,
     wave = vim.tbl_extend("force", {}, opts.wave, { fps = active_fps }),
+    lava = opts.lava,
     spiral = opts.spiral,
   }
 end
