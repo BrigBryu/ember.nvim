@@ -2,30 +2,18 @@
 
 Animated ASCII heat-map widgets for Neovim, built with floating windows and highlight groups instead of terminal escape rendering.
 
-![ember.nvim preview](ember-export.gif)
+`ember.nvim` is the original editor-integrated version of the project. If you want the standalone terminal application instead, see the sibling `ember.term` repo.
 
-![ember.nvim full preview](ember.neovim.gif)
+![ember.nvim preview](ember.neovim-cropped.gif)
 
 ## Features
 
 - Standalone Neovim plugin with `setup`, `start`, `stop`, `toggle`, `set_intensity`, `stats`, and `benchmark`
-- Multiple scenes: classic fire, a smooth lava metaball scene, and a looping ember spiral
+- Three scenes: `fire`, `lava`, `spiral`
 - Non-focusable floating window that survives buffer switching
 - Palette system with `auto`, `gruvbox`, `default`, or custom highlight specs
 - Optional `nvim-tree` attach mode with automatic fallback to float mode
 - Commands: `:EmberStart`, `:EmberStop`, `:EmberToggle`, `:EmberBenchmark`
-
-## Recent Performance Work
-
-- Replaced per-cell highlight updates with contiguous highlight runs.
-- Switched frame updates to dirty-row writes with a full-frame fallback threshold.
-- Added reusable renderer buffers and row-aware frame materialization to cut steady-state allocations.
-- Added runtime profiling with `stats()` and benchmark breakdowns for render, line updates, namespace clears, and highlights.
-- Tuned the spiral scene to reduce expensive math and dramatically reduce full rewrites on larger canvases.
-
-In the current benchmark pass, `spiral 80x24` improved from roughly `0.48ms` to `0.26ms` average frame time while also dropping from frequent full rewrites to only occasional ones.
-
-In practice, that means ember should feel much lighter during normal editing, especially on larger windows or when running the spiral scene for long sessions.
 
 ## Installation
 
@@ -97,7 +85,19 @@ require("ember").stats()
 require("ember").benchmark({ frames = 180 })
 ```
 
-## Lava Example
+## Scene Notes
+
+Lava currently looks a little odd, but it is interesting enough to keep around as a distinct scene.
+
+### Lava Preview
+
+![Lava preview](lava-ember.nvim-example.gif)
+
+### Spiral Preview
+
+![Spiral preview](spiral-ember.nvim-example.gif)
+
+### Lava Example
 
 ```lua
 require("ember").setup({
@@ -110,7 +110,7 @@ require("ember").setup({
 })
 ```
 
-## Spiral Example
+### Spiral Example
 
 ```lua
 require("ember").setup({
@@ -122,31 +122,6 @@ require("ember").setup({
     thickness = 1.2,
     rotation_speed = 0.24,
     pulse_amount = 0.08,
-  },
-})
-```
-
-## Gruvbox Example
-
-```lua
-require("ember").setup({
-  palette = "gruvbox",
-  attach = {
-    mode = "nvim-tree",
-  },
-})
-```
-
-## Battery-Friendly Example
-
-```lua
-require("ember").setup({
-  fps = 6,
-  intensity = 0.45,
-  adaptive_fps = {
-    enabled = true,
-    idle_fps = 3,
-    active_fps = 6,
   },
 })
 ```
@@ -212,7 +187,7 @@ require("ember").setup({
 
 The `spiral` table applies only to `scene = "spiral"` and controls the vortex turns, width, rotation speed, pulse, and center offset.
 
-The `lava` table applies only to `scene = "lava"` and controls how many soft blobs drift through the widget, how quickly they move, how much they pulse, and how the whole scene is biased within the window. Lava is a smooth metaball-like scene that uses the same warm ember palette and char ramp.
+The `lava` table applies only to `scene = "lava"` and controls how many soft blobs drift through the widget, how quickly they move, how much they pulse, and how the whole scene is biased within the window. Lava uses the same warm ember palette and char ramp as the rest of the plugin.
 
 `adaptive_fps` is optional and drops to `idle_fps` when ember is visually quiet, then returns to `active_fps` as motion picks back up. `full_rewrite_threshold` controls when the renderer stops doing dirty-row updates and rewrites the entire frame instead.
 
@@ -240,6 +215,16 @@ require("ember").setup({
 ```
 
 Users and themes can also define `EmberFire0` through `EmberFire11` directly if they want full control over the rendered colors.
+
+## Performance Notes
+
+- Replaced per-cell highlight updates with contiguous highlight runs.
+- Switched frame updates to dirty-row writes with a full-frame fallback threshold.
+- Added reusable renderer buffers and row-aware frame materialization to cut steady-state allocations.
+- Added runtime profiling with `stats()` and benchmark breakdowns for render, line updates, namespace clears, and highlights.
+- Tuned the spiral scene to reduce expensive math and dramatically reduce full rewrites on larger canvases.
+
+In the current benchmark pass, `spiral 80x24` improved from roughly `0.48ms` to `0.26ms` average frame time while also dropping from frequent full rewrites to only occasional ones.
 
 ## Changelog
 
