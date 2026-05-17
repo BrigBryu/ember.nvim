@@ -17,6 +17,10 @@ Animated ASCII heat-map widgets for Neovim, built with floating windows and high
 
 ## Installation
 
+## Release Status
+
+`ember.nvim` is shipping as a `v1.0.0` source/plugin release. Install it through your plugin manager or from the repository directly; there are no compiled binary assets for this repo.
+
 ### lazy.nvim
 
 ```lua

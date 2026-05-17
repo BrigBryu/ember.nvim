@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.0.0 - 2026-05-17
 
 ### Added
 - Added `require("ember").stats()` runtime counters for frame activity, rewrite behavior, and API-call timing breakdowns.
